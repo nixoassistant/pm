@@ -223,15 +223,26 @@ def create_issue(call_number, call_date, series_key, dry_run=False):
         print(f"    Body preview: {body[:100]}...")
         return True
 
-    result = gh_api(
-        "issues",
-        method="POST",
-        fields={"title": title, "body": body, "labels": labels}
-    )
+    # Build gh api command manually for proper label array handling
+    cmd = ["gh", "api", f"repos/{REPO}/issues", "--method", "POST",
+           "--field", f"title={title}", "--field", f"body={body}"]
+    for label in config["labels"]:
+        cmd.extend(["--field", f"labels[]={label}"])
+    result = subprocess.run(cmd, capture_output=True, text=True)
 
-    if result and result.get("number"):
-        print(f"  ✅ Created issue #{result['number']}: {title}")
-        print(f"     {result.get('html_url', '')}")
+    if result.returncode != 0:
+        print(f"  ❌ Failed to create issue: {result.stderr.strip()[:200]}")
+        return False
+
+    try:
+        result_data = json.loads(result.stdout) if result.stdout.strip() else {}
+    except json.JSONDecodeError:
+        print(f"  ❌ Failed to parse response")
+        return False
+
+    if result_data and result_data.get("number"):
+        print(f"  ✅ Created issue #{result_data['number']}: {title}")
+        print(f"     {result_data.get('html_url', '')}")
         return True
     else:
         print(f"  ❌ Failed to create issue")
