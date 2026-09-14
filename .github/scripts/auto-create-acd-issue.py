@@ -19,7 +19,6 @@ import argparse
 import json
 import os
 import re
-import subprocess
 from datetime import datetime, timedelta, timezone
 
 REPO = os.environ.get("GITHUB_REPOSITORY", "ethereum/pm")
@@ -54,25 +53,36 @@ CALL_TIME = "14:00 UTC"
 CADENCE_DAYS = 14  # bi-weekly
 
 
-def gh_api(endpoint, method="GET", fields=None):
-    """Call GitHub API via gh CLI."""
-    token = GITHUB_TOKEN
-    cmd = ["gh", "api", f"repos/{REPO}/{endpoint}"]
-    if token:
-        cmd.extend(["--header", f"Authorization=token {token}"])
-    if method != "GET":
-        cmd.extend(["--method", method])
-    if fields:
-        for k, v in fields.items():
-            cmd.extend(["--field", f"{k}={v}"])
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode != 0:
-        print(f"  API error: {result.stderr.strip()[:200]}")
-        return None
+def api_call(endpoint, method="GET", payload=None):
+    """Call GitHub REST API via curl."""
+    import urllib.request
+    url = f"https://api.github.com/repos/{REPO}/{endpoint}"
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    if GITHUB_TOKEN:
+        headers["Authorization"] = f"Bearer {GITHUB_TOKEN}"
+
+    data = json.dumps(payload).encode() if payload else None
+    req = urllib.request.Request(url, data=data, method=method, headers=headers)
     try:
-        return json.loads(result.stdout) if result.stdout.strip() else {}
-    except json.JSONDecodeError:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            body = resp.read().decode()
+            return json.loads(body) if body.strip() else {}
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode()[:200] if e.fp else str(e)
+        print(f"  API error ({e.code}): {error_body}")
         return None
+    except Exception as e:
+        print(f"  API error: {e}")
+        return None
+
+def gh_api(endpoint, method="GET", fields=None):
+    """Compatibility wrapper — calls api_call."""
+    if fields and method == "POST":
+        return api_call(endpoint, method=method, payload=fields)
+    return api_call(endpoint, method=method)
 
 
 def get_recent_issues(series_key):
@@ -227,24 +237,8 @@ def create_issue(call_number, call_date, series_key, dry_run=False):
         return True
 
     # Build gh api command manually for proper label array handling
-    token = GITHUB_TOKEN
-    cmd = ["gh", "api", f"repos/{REPO}/issues", "--method", "POST",
-           "--field", f"title={title}", "--field", f"body={body}"]
-    if token:
-        cmd.extend(["--header", f"Authorization=token {token}"])
-    for label in config["labels"]:
-        cmd.extend(["--field", f"labels[]={label}"])
-    result = subprocess.run(cmd, capture_output=True, text=True)
-
-    if result.returncode != 0:
-        print(f"  ❌ Failed to create issue: {result.stderr.strip()[:200]}")
-        return False
-
-    try:
-        result_data = json.loads(result.stdout) if result.stdout.strip() else {}
-    except json.JSONDecodeError:
-        print(f"  ❌ Failed to parse response")
-        return False
+    payload = {"title": title, "body": body, "labels": config["labels"]}
+    result_data = api_call("issues", method="POST", payload=payload)
 
     if result_data and result_data.get("number"):
         print(f"  ✅ Created issue #{result_data['number']}: {title}")
