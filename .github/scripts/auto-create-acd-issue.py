@@ -23,7 +23,7 @@ import subprocess
 from datetime import datetime, timedelta, timezone
 
 REPO = os.environ.get("GITHUB_REPOSITORY", "ethereum/pm")
-GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
+GITHUB_TOKEN = os.environ.get("PAT_TOKEN") or os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN", "")
 
 # Anchors: the most recent known calls
 # ACDE #246 = Sep 24, 2026 (open), ACDC #187 = Sep 17, 2026 (open)
@@ -56,7 +56,10 @@ CADENCE_DAYS = 14  # bi-weekly
 
 def gh_api(endpoint, method="GET", fields=None):
     """Call GitHub API via gh CLI."""
+    token = GITHUB_TOKEN
     cmd = ["gh", "api", f"repos/{REPO}/{endpoint}"]
+    if token:
+        cmd.extend(["--header", f"Authorization=token {token}"])
     if method != "GET":
         cmd.extend(["--method", method])
     if fields:
@@ -224,8 +227,11 @@ def create_issue(call_number, call_date, series_key, dry_run=False):
         return True
 
     # Build gh api command manually for proper label array handling
+    token = GITHUB_TOKEN
     cmd = ["gh", "api", f"repos/{REPO}/issues", "--method", "POST",
            "--field", f"title={title}", "--field", f"body={body}"]
+    if token:
+        cmd.extend(["--header", f"Authorization=token {token}"])
     for label in config["labels"]:
         cmd.extend(["--field", f"labels[]={label}"])
     result = subprocess.run(cmd, capture_output=True, text=True)
