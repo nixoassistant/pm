@@ -937,6 +937,22 @@
         "youtube_streams_posted_to_discourse": false,
         "youtube_streams": null,
         "occurrence_number": 38
+      },
+      {
+        "issue_number": 6,
+        "issue_title": "All Core Devs - Execution (ACDE) #251, December 3, 2026",
+        "start_time": "2026-12-03T14:00:00Z",
+        "duration": 90,
+        "skip_youtube_upload": false,
+        "skip_transcript_processing": false,
+        "youtube_upload_processed": false,
+        "transcript_processed": false,
+        "upload_attempt_count": 0,
+        "transcript_attempt_count": 0,
+        "telegram_message_id": null,
+        "youtube_streams_posted_to_discourse": false,
+        "youtube_streams": null,
+        "occurrence_number": 39
       }
     ],
     "calendar_event_id": "02cu1b1g1mscunv7d3p0ilg3gg",
